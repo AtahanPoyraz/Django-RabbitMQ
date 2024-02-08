@@ -1,0 +1,108 @@
+version: '3.11'
+
+services:
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+    - "5672:5672"
+    - "15672:15672"
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+#docker-compose run --rm consumerproject sh
+#python manage.py consumemessage
+
+  producer:
+    build: 
+      context: ./Producer
+    ports:
+      - "8002:8002"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=devuser
+      - DB_PASS=changeme
+    depends_on:
+      - db
+      - rabbitmq
+
+#docker-compose run --rm producerproject sh -c "python manage.py"
+#docker-compose run --rm producerproject sh -c "python manage.py makemigrations ProducerApp"
+
+  consumer1:
+    build: 
+      context: ./Consumer1
+    ports:
+    - "8000:8000"
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8000 && python manage.py get_message"
+    environment:
+      - DEBUG=1
+      - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=devuser
+      - DB_PASS=changeme
+    depends_on:
+      - consumer_db
+      - rabbitmq
+
+  consumer2:
+    build: 
+      context: ./Consumer2
+    ports:
+    - "8001:8001"
+    command: >
+      sh -c "python manage.py runserver 0.0.0.0:8001 && python manage.py get_message"
+    environment:
+      - DEBUG=1
+      - DJANGO_ALLOWED_HOSTS=localhost 127.0.0.1
+      - DB_HOST=db
+      - DB_NAME=devdb
+      - DB_USER=devuser
+      - DB_PASS=changeme
+    depends_on:
+      - consumer_db
+      - rabbitmq
+
+
+  db:
+    image: postgres:13
+    restart: always
+    volumes:
+      - dev-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=devdb
+      - POSTGRES_USER=devuser
+      - POSTGRES_PASSWORD=changeme
+    ports:
+      - "5432:5432"
+
+  consumer_db:
+    image: postgres:13
+    restart: always
+    volumes:
+      - consumer_dev-db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=devdb
+      - POSTGRES_USER=devuser
+      - POSTGRES_PASSWORD=changeme
+    ports:
+      - "5433:5433"
+
+  nginx:
+    build:
+      context: ./nginx
+    ports:
+      - "80:80"
+      - "81:81"
+      - "82:82"
+    depends_on:
+      - consumer1
+      - consumer2
+      - producer
+
+volumes:
+  rabbitmq:
+  dev-db-data:
+  consumer_dev-db-data:
